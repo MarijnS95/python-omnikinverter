@@ -152,7 +152,9 @@ class OmnikInverter:
             writer.write(tcp.create_information_request(self.serial_number))
             await writer.drain()
 
-            raw_msg = await reader.read(1024)
+            # FUTURE: Omnik repeatedly sends statistics at a 15-45 second interval,
+            # as long as this connection remains open!
+            return await tcp.parse_messages(self.serial_number, reader)
         finally:
             writer.close()
             try:
@@ -161,8 +163,6 @@ class OmnikInverter:
                 raise OmnikInverterConnectionError(
                     "Failed to communicate with the Omnik Inverter device over TCP"
                 ) from exception
-
-        return tcp.parse_messages(self.serial_number, raw_msg)
 
     async def inverter(self) -> Inverter:
         """Get values from your Omnik Inverter.

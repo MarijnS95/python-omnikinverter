@@ -1,5 +1,6 @@
 """Data model and conversions for tcp-based communication with the Omnik Inverter."""
 from collections.abc import Generator
+import asyncio
 from ctypes import BigEndianStructure, c_char, c_ubyte, c_uint, c_ushort
 from typing import Any, Optional
 
@@ -12,6 +13,7 @@ MESSAGE_SEND_SEP = 0x40
 MESSAGE_RECV_SEP = 0x41
 MESSAGE_TYPE_INFORMATION_REQUEST = 0x30
 MESSAGE_TYPE_INFORMATION_REPLY = 0xB0
+MESSAGE_TYPE_ERROR_STRING = 0xB1
 MESSAGE_TYPE_STRING = 0xF0  # Message seems to consist of pure text
 UINT16_MAX = 65535
 # Message length field does not include the "header":
@@ -125,40 +127,42 @@ def _unpack_message(message: bytearray) -> tuple[int, int, bytearray]:
     return (message_type, serial0, message[8:])
 
 
-def _unpack_messages(
-    data: bytearray,
+async def _unpack_messages(
+    reader: asyncio.StreamReader,
 ) -> Generator[tuple[int, int, bytearray], None, None]:
-    while len(data):
-        message_start = data.pop(0)
-        # Whenever my Omnik sends an INFORMATION_REPLY followed by a STRING
-        # text message, there's a bunch of trailing 0xFF garbage
+    async def readbyte():
+        return (await reader.readexactly(1))[0]
+
+    while True:
+        message_start = await readbyte()
         if message_start == 0xFF:  # pragma: no cover
-            if not all(d == 0xFF for d in data):
-                raise OmnikInverterPacketInvalidError(
-                    "(Next) message starts with `0xFF` but the remainder "
-                    f"is not strictly 0xFF: {data}"
-                )
-            # We're done
+            # The stream contains a bunch more 0xFF to "end" the current sequence of
+            # messages.  After some time more information will be sent, presuming this
+            # TCP stream is kept open.
+            # XXX: Replace this with `continue` to keep indefinitely yielding valid messages
             return
 
         if message_start != MESSAGE_START:
             raise OmnikInverterPacketInvalidError("Invalid start byte")
 
-        length = data[0] + MESSAGE_HEADER_SIZE
+        original_length = await readbyte()
+        length = original_length + MESSAGE_HEADER_SIZE
 
-        message = data[:length]
+        # Read message and reconstruct with length byte for CRC check
+        message = bytearray(
+            [original_length] + list(await reader.readexactly(length - 1))
+        )
         if len(message) != length:
             raise OmnikInverterPacketInvalidError(
                 f"Could only read {len(message)} out of {length} "
                 "expected bytes from TCP stream",
             )
 
-        yield _unpack_message(message)
-
-        # Prepare for the next message by stripping off the end byte
-        data = data[length:]
-        if data.pop(0) != MESSAGE_END:
+        # Prepare for the next message by consuming the end byte
+        if await readbyte() != MESSAGE_END:
             raise OmnikInverterPacketInvalidError("Invalid end byte")
+
+        yield _unpack_message(message)
 
 
 def create_information_request(serial_number: int) -> bytearray:
@@ -175,13 +179,15 @@ def create_information_request(serial_number: int) -> bytearray:
     )
 
 
-def parse_messages(serial_number: int, data: bytes) -> dict[str, Any]:
-    """Perform a raw TCP request to the Omnik device.
+async def parse_messages(
+    serial_number: int, reader: asyncio.StreamReader
+) -> dict[str, Any]:
+    """Receive and process replies from the Omnik inverter over TCP.
 
     Args:
         serial_number: Serial number passed to
             `clk.create_information_request()`, used to validate the reply.
-        data: Raw data reply from the Omnik Inverter.
+        reader: Raw socket from which to read Omnik inverter replies.
 
     Returns:
         A Python dictionary (text) with the response from
@@ -193,13 +199,8 @@ def parse_messages(serial_number: int, data: bytes) -> dict[str, Any]:
 
     info = None
 
-    for (message_type, reply_serial_number, message) in _unpack_messages(
-        bytearray(data)
-    ):
-        if reply_serial_number != serial_number:  # pragma: no cover
-            # This is allowed as it does not seem to be required to pass the serial
-            # number in the request - though empirical testing has to point out whether
-            # the request takes longer this way.
+    async for (message_type, reply_serial_number, message) in _unpack_messages(reader):
+        if reply_serial_number != serial_number:
             LOGGER.debug(
                 "Replied serial number %s not equal to request %s",
                 reply_serial_number,
@@ -214,6 +215,8 @@ def parse_messages(serial_number: int, data: bytes) -> dict[str, Any]:
             LOGGER.warning(
                 "Omnik sent text message `%s`", message.decode("utf8").strip()
             )
+        elif message_type == MESSAGE_TYPE_ERROR_STRING:  # pragma: no cover
+            LOGGER.warning("Omnik sent error message `%s`", message)
         else:
             raise OmnikInverterPacketInvalidError(
                 f"Unknown Omnik message type {message_type:02x} "
