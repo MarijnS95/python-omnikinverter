@@ -113,7 +113,7 @@ async def test_wrong_js_source(aresponses: ResponsesMockServer) -> None:
     async with aiohttp.ClientSession() as session:
         client = OmnikInverter(host="example.com", session=session)
         with pytest.raises(OmnikInverterWrongSourceError):
-            assert await client.inverter()
+            assert (await client.perform_request()).inverter()
 
 
 @pytest.mark.asyncio
@@ -139,7 +139,7 @@ async def test_wrong_html_source(aresponses: ResponsesMockServer) -> None:
             session=session,
         )
         with pytest.raises(OmnikInverterWrongSourceError):
-            assert await client.inverter()
+            assert (await client.perform_request()).inverter()
 
 
 @pytest.mark.asyncio
@@ -158,7 +158,7 @@ async def test_html_no_auth(aresponses: ResponsesMockServer) -> None:
     async with aiohttp.ClientSession() as session:
         client = OmnikInverter(host="example.com", source_type="html", session=session)
         with pytest.raises(OmnikInverterAuthError):
-            assert await client.inverter()
+            assert await client.perform_request()
 
 
 @pytest.mark.asyncio
@@ -176,7 +176,7 @@ async def test_timeout(aresponses: ResponsesMockServer) -> None:
     async with aiohttp.ClientSession() as session:
         client = OmnikInverter(host="example.com", session=session, request_timeout=0.1)
         with pytest.raises(OmnikInverterConnectionError):
-            assert await client.inverter()
+            assert await client.perform_request()
 
 
 @pytest.mark.asyncio
@@ -195,7 +195,7 @@ async def test_content_type(aresponses: ResponsesMockServer) -> None:
     async with aiohttp.ClientSession() as session:
         client = OmnikInverter(host="example.com", session=session)
         with pytest.raises(OmnikInverterError):
-            assert await client.inverter()
+            assert await client.perform_request()
 
 
 @pytest.mark.asyncio
