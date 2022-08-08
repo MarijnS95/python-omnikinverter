@@ -267,6 +267,9 @@ class Inverter:
         """
 
         return Inverter(
+            # Unknown for Trannergy, `data` may or may not contain these fields
+            firmware=None,
+            firmware_slave=None,
             **data,
             model=None,  # Not able to deduce this from raw message yet
             solar_rated_power=None,

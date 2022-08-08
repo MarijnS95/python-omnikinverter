@@ -8,7 +8,7 @@ from .exceptions import OmnikInverterPacketInvalidError
 MESSAGE_START = 0x68
 MESSAGE_END = 0x16
 MESSAGE_SEND_SEP = 0x40
-MESSAGE_RECV_SEP = 0x41
+MESSAGE_RECV_SEP = 0x51
 MESSAGE_TYPE_INFORMATION_REQUEST = 0x30
 MESSAGE_TYPE_INFORMATION_REPLY = 0xB0
 MESSAGE_TYPE_STRING = 0xF0  # Message seems to consist of pure text
@@ -63,10 +63,10 @@ class _TcpData(BigEndianStructure):
         ("padding1", c_ubyte * 4),
         ("unknown0", c_ushort),
         ("padding2", c_ubyte * 10),
-        ("firmware", c_char * 16),
+        # ("firmware", c_char * 16),
         ("padding3", c_ubyte * 4),
-        ("firmware_slave", c_char * 16),
-        ("padding4", c_ubyte * 4),
+        # ("firmware_slave", c_char * 16),
+        # ("padding4", c_ubyte * 4),
     ]
 
 
@@ -239,7 +239,7 @@ def _parse_information_reply(data: bytes) -> dict[str, Any]:
     # For all data that's expected to be zero, print it if it's not. Perhaps
     # there are more interesting fields on different inverters waiting to be
     # uncovered.
-    for idx in range(1, 5):  # pragma: no cover
+    for idx in range(1, 4):  # pragma: no cover
         name = f"padding{idx}"
         padding = getattr(tcp_data, name)
         if sum(padding):
@@ -267,8 +267,8 @@ def _parse_information_reply(data: bytes) -> dict[str, Any]:
         "solar_energy_total": 0.1,
         "solar_hours_total": None,
         "inverter_active": int_to_bool,
-        "firmware": None,
-        "firmware_slave": None,
+        # "firmware": None,
+        # "firmware_slave": None,
     }
 
     result = {}
