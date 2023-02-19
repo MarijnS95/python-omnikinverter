@@ -139,8 +139,7 @@ async def _unpack_messages(
             # The stream contains a bunch more 0xFF to "end" the current sequence of
             # messages.  After some time more information will be sent, presuming this
             # TCP stream is kept open.
-            # XXX: Replace this with `continue` to keep indefinitely yielding valid messages
-            return
+            continue
 
         if message_start != MESSAGE_START:
             raise OmnikInverterPacketInvalidError("Invalid start byte")
@@ -181,7 +180,7 @@ def create_information_request(serial_number: int) -> bytearray:
 
 async def parse_messages(
     serial_number: int, reader: asyncio.StreamReader
-) -> dict[str, Any]:
+) -> Generator[dict[str, Any], None, None]:
     """Receive and process replies from the Omnik inverter over TCP.
 
     Args:
@@ -199,7 +198,7 @@ async def parse_messages(
 
     info = None
 
-    async for (message_type, reply_serial_number, message) in _unpack_messages(reader):
+    async for message_type, reply_serial_number, message in _unpack_messages(reader):
         if reply_serial_number != serial_number:
             LOGGER.debug(
                 "Replied serial number %s not equal to request %s",
@@ -212,9 +211,18 @@ async def parse_messages(
                 LOGGER.warning("Omnik sent multiple INFORMATION_REPLY messages")
             info = _parse_information_reply(message)
         elif message_type == MESSAGE_TYPE_STRING:  # pragma: no cover
-            LOGGER.warning(
-                "Omnik sent text message `%s`", message.decode("utf8").strip()
-            )
+            message = message.decode("utf8")
+            LOGGER.debug("Omnik sent text message `%s`", message.strip())
+
+            if message == "DATA SEND IS OK\r\n":
+                if info is None:
+                    raise OmnikInverterPacketInvalidError(
+                        "None of the messages contained an information reply!"
+                    )
+                LOGGER.debug("Data frame complete, yielding inverter info")
+                yield info
+                info = None
+
         elif message_type == MESSAGE_TYPE_ERROR_STRING:  # pragma: no cover
             LOGGER.warning("Omnik sent error message `%s`", message)
         else:
@@ -222,13 +230,6 @@ async def parse_messages(
                 f"Unknown Omnik message type {message_type:02x} "
                 f"with contents `{message}`",
             )
-
-    if info is None:
-        raise OmnikInverterPacketInvalidError(
-            "None of the messages contained an information reply!"
-        )
-
-    return info
 
 
 def _parse_information_reply(data: bytes) -> dict[str, Any]:
@@ -282,7 +283,7 @@ def _parse_information_reply(data: bytes) -> dict[str, Any]:
 
     result: dict[str, Any] = {}
 
-    for (name, extractor) in field_extractors.items():
+    for name, extractor in field_extractors.items():
         value = getattr(tcp_data, name)
 
         if name == "ac_output":

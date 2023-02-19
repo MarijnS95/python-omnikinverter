@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Generator
 from dataclasses import dataclass
 from typing import Any
 
@@ -122,7 +122,7 @@ class OmnikInverter:
 
         return raw_response.decode("ascii", "ignore")
 
-    async def tcp_request(self) -> dict[str, Any]:
+    async def tcp_request(self) -> Generator[dict[str, Any], None, None]:
         """Perform a raw TCP request to the Omnik device.
 
         Returns:
@@ -152,9 +152,10 @@ class OmnikInverter:
             writer.write(tcp.create_information_request(self.serial_number))
             await writer.drain()
 
-            # FUTURE: Omnik repeatedly sends statistics at a 15-45 second interval,
-            # as long as this connection remains open!
-            return await tcp.parse_messages(self.serial_number, reader)
+            # TODO: Why can't I forward the async iterator?
+            # return tcp.parse_messages(self.serial_number, reader)
+            async for msg in tcp.parse_messages(self.serial_number, reader):
+                yield msg
         finally:
             writer.close()
             try:
@@ -164,7 +165,7 @@ class OmnikInverter:
                     "Failed to communicate with the Omnik Inverter device over TCP"
                 ) from exception
 
-    async def inverter(self) -> Inverter:
+    async def inverter(self) -> Generator[Inverter]:
         """Get values from your Omnik Inverter.
 
         Returns:
@@ -173,18 +174,18 @@ class OmnikInverter:
         Raises:
             OmnikInverterError: Unknown source type.
         """
-        if self.source_type == "json":
-            data = await self.request("status.json", params={"CMD": "inv_query"})
-            return Inverter.from_json(json.loads(data))
-        if self.source_type == "html":
-            data = await self.request("status.html")
-            return Inverter.from_html(data)
-        if self.source_type == "javascript":
-            data = await self.request("js/status.js")
-            return Inverter.from_js(data)
+        # if self.source_type == "json":
+        #     data = await self.request("status.json", params={"CMD": "inv_query"})
+        #     return Inverter.from_json(json.loads(data))
+        # if self.source_type == "html":
+        #     data = await self.request("status.html")
+        #     return Inverter.from_html(data)
+        # if self.source_type == "javascript":
+        #     data = await self.request("js/status.js")
+        #     return Inverter.from_js(data)
         if self.source_type == "tcp":
-            fields = await self.tcp_request()
-            return Inverter.from_tcp(fields)
+            async for fields in self.tcp_request():
+                yield Inverter.from_tcp(fields)
 
         raise OmnikInverterError(f"Unknown source type `{self.source_type}`")
 
@@ -197,15 +198,15 @@ class OmnikInverter:
         Raises:
             OmnikInverterError: Unknown source type.
         """
-        if self.source_type == "json":
-            data = await self.request("status.json", params={"CMD": "inv_query"})
-            return Device.from_json(json.loads(data))
-        if self.source_type == "html":
-            data = await self.request("status.html")
-            return Device.from_html(data)
-        if self.source_type == "javascript":
-            data = await self.request("js/status.js")
-            return Device.from_js(data)
+        # if self.source_type == "json":
+        #     data = await self.request("status.json", params={"CMD": "inv_query"})
+        #     return Device.from_json(json.loads(data))
+        # if self.source_type == "html":
+        #     data = await self.request("status.html")
+        #     return Device.from_html(data)
+        # if self.source_type == "javascript":
+        #     data = await self.request("js/status.js")
+        #     return Device.from_js(data)
         if self.source_type == "tcp":
             # None of the fields are available through a TCP data dump.
             return Device()
