@@ -330,7 +330,7 @@ async def test_inverter_tcp_start_marker() -> None:
     """Require start marker."""
 
     with pytest.raises(OmnikInverterPacketInvalidError) as excinfo:
-        assert tcp.parse_messages(1, bytearray(b"broken data"))
+        assert await tcp.parse_messages(1, bytearray(b"broken data"))
 
     assert str(excinfo.value) == "Invalid start byte"
 
@@ -339,7 +339,7 @@ async def test_inverter_tcp_data_too_short() -> None:
     """Require enough bytes available to satisfy length field."""
 
     with pytest.raises(OmnikInverterPacketInvalidError) as excinfo:
-        assert tcp.parse_messages(1, bytearray([tcp.MESSAGE_START, 20]))
+        assert await tcp.parse_messages(1, bytearray([tcp.MESSAGE_START, 20]))
 
     assert (
         str(excinfo.value)
@@ -368,7 +368,7 @@ async def test_inverter_tcp_checksum_correct() -> None:
     checksum = sum(test_message) & 0xFF
 
     with pytest.raises(OmnikInverterPacketInvalidError) as excinfo:
-        assert tcp.parse_messages(
+        assert await tcp.parse_messages(
             serial_number,
             bytearray(
                 [tcp.MESSAGE_START]
@@ -398,7 +398,7 @@ async def test_inverter_tcp_recv_sep() -> None:
     checksum = sum(test_message) & 0xFF
 
     with pytest.raises(OmnikInverterPacketInvalidError) as excinfo:
-        assert tcp.parse_messages(
+        assert await tcp.parse_messages(
             serial_number,
             bytearray(
                 [tcp.MESSAGE_START] + list(test_message) + [checksum, tcp.MESSAGE_END]
@@ -423,7 +423,7 @@ async def test_inverter_tcp_double_serial_match() -> None:
     checksum = sum(test_message) & 0xFF
 
     with pytest.raises(OmnikInverterPacketInvalidError) as excinfo:
-        assert tcp.parse_messages(
+        assert await tcp.parse_messages(
             3,
             bytearray(
                 [tcp.MESSAGE_START] + list(test_message) + [checksum, tcp.MESSAGE_END]
@@ -448,7 +448,7 @@ async def test_inverter_tcp_end_marker() -> None:
     checksum = sum(test_message) & 0xFF
 
     with pytest.raises(OmnikInverterPacketInvalidError) as excinfo:
-        assert tcp.parse_messages(
+        assert await tcp.parse_messages(
             serial_number,
             bytearray(
                 [tcp.MESSAGE_START]
@@ -478,7 +478,7 @@ async def test_inverter_tcp_known_message_type() -> None:
     checksum = sum(test_message) & 0xFF
 
     with pytest.raises(OmnikInverterPacketInvalidError) as excinfo:
-        assert tcp.parse_messages(
+        assert await tcp.parse_messages(
             serial_number,
             bytearray(
                 [tcp.MESSAGE_START] + list(test_message) + [checksum, tcp.MESSAGE_END]
@@ -506,7 +506,7 @@ async def test_inverter_tcp_require_information_reply() -> None:
     checksum = sum(test_message) & 0xFF
 
     with pytest.raises(OmnikInverterPacketInvalidError) as excinfo:
-        assert tcp.parse_messages(
+        assert await tcp.parse_messages(
             serial_number,
             bytearray(
                 [tcp.MESSAGE_START]
