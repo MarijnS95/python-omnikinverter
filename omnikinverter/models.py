@@ -31,7 +31,6 @@ class WebResponse:
         ------
             OmnikInverterError: Unknown source type.
         """
-        # TODO: Perform this before WebResponse is constructed?
         if self.source_type == "json":
             return Inverter.from_json(json.loads(self.response_string))
         if self.source_type == "html":
@@ -39,7 +38,8 @@ class WebResponse:
         if self.source_type == "javascript":
             return Inverter.from_js(self.response_string)
 
-        # TODO: This should be unreachable
+        # This is unreachable; perhaps we should do the data conversion when
+        # WebRequest is constructed instead?
         msg = f"Unknown source type `{self.source_type}`"  # pragma: no cover
         raise OmnikInverterError(msg)  # pragma: no cover
 
@@ -54,7 +54,6 @@ class WebResponse:
         ------
             OmnikInverterError: Unknown source type.
         """
-        # TODO: Perform this before WebResponse is constructed?
         if self.source_type == "json":
             return Device.from_json(json.loads(self.response_string))
         if self.source_type == "html":
@@ -62,7 +61,8 @@ class WebResponse:
         if self.source_type == "javascript":
             return Device.from_js(self.response_string)
 
-        # TODO: This should be unreachable
+        # This is unreachable; perhaps we should do the data conversion when
+        # WebRequest is constructed instead?
         msg = f"Unknown source type `{self.source_type}`"  # pragma: no cover
         raise OmnikInverterError(msg)  # pragma: no cover
 
@@ -99,13 +99,14 @@ class Inverter:
 
     serial_number: str | None
     model: str | None
-    firmware: str | None
-    firmware_slave: str | None
     solar_rated_power: int | None
     solar_current_power: int | None
     solar_energy_today: float | None
     solar_energy_total: float | None
     alarm_code: str | None = None
+
+    firmware: str | None = None
+    firmware_slave: str | None = None
 
     # TCP only
     inverter_active: bool | None = None

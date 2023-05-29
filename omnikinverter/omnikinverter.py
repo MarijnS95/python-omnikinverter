@@ -138,11 +138,11 @@ class OmnikInverter:
         try:
             async with async_timeout.timeout(self.request_timeout):
                 reader, writer = await asyncio.open_connection(self.host, self.tcp_port)
-        except OSError as exception:
-            msg = "Failed to open a TCP connection to the Omnik Inverter device"
-            raise OmnikInverterConnectionError(msg) from exception
         except asyncio.TimeoutError as exception:  # pragma: no cover
             msg = "Timeout occurred while connecting to the Omnik Inverter device"
+            raise OmnikInverterConnectionError(msg) from exception
+        except OSError as exception:
+            msg = "Failed to open a TCP connection to the Omnik Inverter device"
             raise OmnikInverterConnectionError(msg) from exception
 
         try:
@@ -164,7 +164,6 @@ class OmnikInverter:
 
         return tcp.parse_messages(self.serial_number, raw_msg)
 
-    # TODO: Rename
     async def perform_request(self) -> WebResponse | TcpResponse:
         """Get values from your Omnik Inverter.
 
